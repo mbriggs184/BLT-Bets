@@ -1,11 +1,14 @@
 import time
-import requests
+import datetime
 import pandas as pd
+import re
+import xlwings as xw
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 
+from classes import *
 
 def getMatchData(matchIds):
     """Use webscraping to get the match data
@@ -42,18 +45,137 @@ def getMatchData(matchIds):
 
     return matchData
 
-def getGameFixture(year):
-    # Use webscraping to get the game fixture for the given year
+def getSeasonFixture(year, seasonID, numRounds):
+    """Use webscraping to get the game fixture for the given year
 
-    pass
+    Args:
+        year (int): The year of the fixture
+        seasonID (int): The code of the year for the URL
+        numRounds (int): The number of rounds in the season
+
+    Raises:
+        Exception: Couldn't find the game id for a game
+
+    Returns:
+        object: The fixture object 
+    """  
+
+    # Create fixture object
+    fixture = Fixture(year, numRounds)
+
+    # Open the chrome webdriver
+    driver = webdriver.Chrome(executable_path='C:\Program Files (x86)\Google\Chrome\chromedriver.exe')
+
+    
+    for i in range(1, numRounds + 1):
+        print(f"Getting fixture for round {i}")
+
+        # Open the webpage of the week
+        url = f"https://www.afl.com.au/fixture?Competition=1&CompSeason={seasonID}&MatchTimezone=MY_TIME&Regions=2&ShowBettingOdds=1&GameWeeks={i}&Teams=2&Venues=3#byround"
+        driver.get(url)
+        time.sleep(2)
+
+        # Get data from the webpage and process it
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        divs = soup.find_all("section", {"class": "match-list"})
+        games = processFixture(divs[0], year)
+        
+        # Add the week's games to the fixture object
+        fixture.addRound(i, games)
+
+    # Close the chrome webdriver
+    driver.close()
+    
+    return fixture
+
+def processFixture(html_string, year):
+    """Processes the information from the HTML of the game fixture for a week
+
+    Args:
+        html_string (string): Raw HTML from the AFL website
+        year (int): The year of the fixture
+
+    Raises:
+        Exception: Couldn't find the game id for a game
+
+    Returns:
+        list: A list of game objects for the week
+    """
+    
+    games = []
+
+    daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    pattern = r'\b(?:{})\b'.format('|'.join(daysOfWeek))
+
+    # Iterate over all the HTML tags
+    day = datetime.datetime(2000, 1, 1)
+    for tag in html_string:
+        rowText = tag.text
+        if re.search(pattern, rowText, re.IGNORECASE):
+            # New day
+            day = rowText.split(" ")
+            day = datetime.datetime(year, datetime.datetime.strptime(day[3], "%B").month, int(day[4]))
+        else:
+            # Get the game ID
+            index = str(tag).find("data-match-id")
+            if index!= -1:
+                startIndex = index + len("data-match-id") + 2
+                endIndex = startIndex + 4
+                gameID = int(str(tag)[startIndex:endIndex])
+            else:
+                print(f"Could not find the game ID for: {day}")
+                game = Game(0000, day, "homeTeam", "awayTeam")
+                games.append(game)
+                break
+
+
+            # Get the home and away teams
+            homeTeam, awayTeam = findHomeAndAwayTeams(rowText)
+
+            game = Game(gameID, day, homeTeam, awayTeam)
+            games.append(game)
+
+    return games
+
+def findHomeAndAwayTeams(rowText):
+    """Find the home and away teams from a list
+
+    Args:
+        rowText (list): list to find the teams in
+
+    Returns:
+        string: home and away teams
+    """
+    gameInfo = rowText.split(" ")
+    gameInfo = [entry for entry in gameInfo if entry]
+
+    # Remove excess
+    for index, word in enumerate(gameInfo):
+        if word == "v":
+            separatorIndex = index
+        elif word in ("Match", "Where"):
+            gameInfo = gameInfo[:index]
+            break
+    
+    # Get home team
+    homeTeam = " ".join(gameInfo[:separatorIndex])
+
+    # Get away team
+    awayTeam = " ".join(gameInfo[separatorIndex + 1:])
+
+    return homeTeam, awayTeam
 
 
 if __name__ == "__main__":
 
-    matchIds = [4890, 4891, 4892]
-    matchData = getMatchData(matchIds)
+    # matchIds = [4890, 4891, 4892]
+    # matchData = getMatchData(matchIds)
 
-    for matchId, playerStats in matchData.items():
-        print(f"\n\n{matchId}\n")
-        print(playerStats)
-    
+    # for matchId, playerStats in matchData.items():
+    #     print(f"\n\n{matchId}\n")
+    #     print(playerStats)
+    wb = xw.Book('BLT Bets.xlsm')
+    sheet = wb.sheets['Fixture']
+
+    fixture = getSeasonFixture(2023, 52, 3)
+    fixture.addToSpreadsheet(sheet)
