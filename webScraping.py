@@ -45,6 +45,56 @@ def getMatchData(matchIds):
 
     return matchData
 
+def getLadder():
+    # Open the chrome webdriver
+    driver = webdriver.Chrome(executable_path='C:\Program Files (x86)\Google\Chrome\chromedriver.exe')
+    
+    # Open the afl ladder webpage
+    url = f"https://www.espn.com.au/afl/standings"
+    driver.get(url)
+
+    # Wait for the webpage to load
+    time.sleep(3)
+
+    # Scrape the player stats
+    table = driver.find_element(By.TAG_NAME, "table")
+    ladder_df = pd.DataFrame() 
+    ladder_df = pd.read_html(table.get_attribute("outerHTML"))
+    ladder_df = ladder_df[0]
+
+    # Close the chrome webdriver
+    driver.close()
+
+    # Add position column
+    newColumn = pd.Series([0]*len(ladder_df), name="Position")
+    ladder_df.insert(loc=0, column="Position", value=newColumn)
+
+    # Rename Team column
+    ladder_df = ladder_df.rename(columns={"Unnamed: 0": "Team"})
+
+    # Parse team name and position
+    for index, row in ladder_df.iterrows():
+        team = row["Team"]
+        
+        if team[1].isdigit():
+            position = team[:2]
+            team = team[2:]
+        else:
+            position = team[0]
+            team = team[1:]
+
+        ladder_df.at[index, "Position"] = int(position)
+
+        count = 0
+        while team[-1].isupper():
+            team = team[:-1]
+            if count > 4:
+                raise Exception(f"Could not parse team {row['Team']}")
+
+        ladder_df.at[index, "Team"] = team
+
+    return ladder_df
+
 def getSeasonFixture(year, seasonID, numRounds):
     """Use webscraping to get the game fixture for the given year
 
@@ -174,8 +224,4 @@ if __name__ == "__main__":
     # for matchId, playerStats in matchData.items():
     #     print(f"\n\n{matchId}\n")
     #     print(playerStats)
-    wb = xw.Book('BLT Bets.xlsm')
-    sheet = wb.sheets['Fixture']
-
-    fixture = getSeasonFixture(2023, 52, 3)
-    fixture.addToSpreadsheet(sheet)
+    getLadder()
