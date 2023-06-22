@@ -10,14 +10,14 @@ from selenium.webdriver.common.by import By
 
 from classes import *
 
-def getMatchData(matchIds):
+def getMatchData(games):
     """Use webscraping to get the match data
 
     Args:
-        matchIds (list(int)): A list of matchIds to scrape
+        games(list(Object)): A list of matchIds to scrape
 
     Returns:
-        dict: contains the match data for each match
+        list(Object): contains the games with the match data
     """
     # 
 
@@ -25,9 +25,12 @@ def getMatchData(matchIds):
     driver = webdriver.Chrome(executable_path='C:\Program Files (x86)\Google\Chrome\chromedriver.exe')
     
     matchData = {}
-    for matchId in matchIds:
+    for game in games:
+
+        gameId = game.gameId
+
         # Open the webpage of the match
-        url = f"https://www.afl.com.au/afl/matches/{matchId}#player-stats"
+        url = f"https://www.afl.com.au/afl/matches/{gameId}#player-stats"
         driver.get(url)
 
         # Wait for the webpage to load
@@ -38,12 +41,13 @@ def getMatchData(matchIds):
         playerStats_df = pd.DataFrame() 
         playerStats_df = pd.read_html(table.get_attribute("outerHTML"))
 
-        matchData[matchId] = playerStats_df
+        game.gameLoaded = True
+        game.addPlayerStats(playerStats_df)
    
     # Close the chrome webdriver
     driver.close()
 
-    return matchData
+    return games
 
 def getLadder():
     # Open the chrome webdriver
@@ -128,17 +132,17 @@ def getSeasonFixture(year, seasonID, numRounds):
         # Get data from the webpage and process it
         soup = BeautifulSoup(driver.page_source, "html.parser")
         divs = soup.find_all("section", {"class": "match-list"})
-        games = processFixture(divs[0], year)
+        games = processFixture(divs[0], year, i)
         
         # Add the week's games to the fixture object
-        fixture.addRound(i, games)
+        fixture.addGames(i, games)
 
     # Close the chrome webdriver
     driver.close()
     
     return fixture
 
-def processFixture(html_string, year):
+def processFixture(html_string, year, roundNumber):
     """Processes the information from the HTML of the game fixture for a week
 
     Args:
@@ -174,7 +178,7 @@ def processFixture(html_string, year):
                 gameID = int(str(tag)[startIndex:endIndex])
             else:
                 print(f"Could not find the game ID for: {day}")
-                game = Game(0000, day, "homeTeam", "awayTeam")
+                game = Game(0000, 0, day, "homeTeam", "awayTeam", False)
                 games.append(game)
                 break
 
@@ -182,7 +186,7 @@ def processFixture(html_string, year):
             # Get the home and away teams
             homeTeam, awayTeam = findHomeAndAwayTeams(rowText)
 
-            game = Game(gameID, day, homeTeam, awayTeam)
+            game = Game(gameID, roundNumber, day, homeTeam, awayTeam, False)
             games.append(game)
 
     return games
@@ -224,4 +228,4 @@ if __name__ == "__main__":
     # for matchId, playerStats in matchData.items():
     #     print(f"\n\n{matchId}\n")
     #     print(playerStats)
-    getLadder()
+    getSeasonFixture()

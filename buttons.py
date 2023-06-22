@@ -19,7 +19,7 @@ def importFixture(wb=None):
 
     lastRow = sheet.cells.last_cell.row
     if lastRow > 7:
-        sheet.range(f"A8:E{lastRow}").clear_contents()
+        sheet.range(f"A8:F{lastRow}").clear_contents()
 
     year = int(sheet.range("C3").value)
     seasonID = int(sheet.range("C4").value)
