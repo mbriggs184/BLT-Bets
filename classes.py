@@ -7,6 +7,9 @@ import numpy as np
 import webScraping as ws
 
 class Fixture:
+
+    # TODO: make some of the methods private
+
     def __init__(self, year, numRounds):
         self.year = year
         self.numRounds = numRounds
