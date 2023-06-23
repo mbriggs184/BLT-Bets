@@ -22,10 +22,13 @@ def updateFixture(wb=None):
 def updatePastGamesData(wb=None):
     if not wb: wb = xw.Book.caller()
     
+    Game.getPlayerTeams(wb)
+
     fixture = Fixture.createFromSpreadsheet(wb)
     fixture.loadFromSpreadsheet(wb)
     fixture.loadGamesData(wb)
     # TODO: Update the PastGamesData sheet 
+    # TODO: Update the fixture sheet when the game is loaded
     # TODO: Update each teamsheet, maybe in another function?
 
 if __name__ == '__main__':

@@ -1,16 +1,22 @@
+import sys
 import time
 import datetime
 import pandas as pd
 import re
+import requests
 import xlwings as xw
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 
+from tkinter import *
+from tkinter.ttk import Progressbar
+
 from classes import *
 
-def getMatchData(games):
+
+def getMatchData(wb, games):
     """Use webscraping to get the match data
 
     Args:
@@ -21,16 +27,18 @@ def getMatchData(games):
     """
     # 
 
+    # TODO: figure out how to speed this function up
+
     # Open the chrome webdriver
     driver = webdriver.Chrome(executable_path='C:\Program Files (x86)\Google\Chrome\chromedriver.exe')
     
-    matchData = {}
+    # Loop through the games and get the match data
     for game in games:
 
-        gameId = game.gameId
+        gameID = game.gameID
 
         # Open the webpage of the match
-        url = f"https://www.afl.com.au/afl/matches/{gameId}#player-stats"
+        url = f"https://www.afl.com.au/afl/matches/{gameID}#player-stats"
         driver.get(url)
 
         # Wait for the webpage to load
@@ -39,10 +47,12 @@ def getMatchData(games):
         # Scrape the player stats
         table = driver.find_element(By.TAG_NAME, "table")
         playerStats_df = pd.DataFrame() 
-        playerStats_df = pd.read_html(table.get_attribute("outerHTML"))
+        playerStats_df = pd.read_html(table.get_attribute("outerHTML"))[0]
 
-        game.gameLoaded = True
         game.addPlayerStats(playerStats_df)
+        game.addToSpreadsheet(wb)
+        game.markGameLoaded(wb, True)
+
    
     # Close the chrome webdriver
     driver.close()
@@ -50,6 +60,8 @@ def getMatchData(games):
     return games
 
 def getLadder():
+    # TODO: try to do this without webdriver
+
     # Open the chrome webdriver
     driver = webdriver.Chrome(executable_path='C:\Program Files (x86)\Google\Chrome\chromedriver.exe')
     
@@ -114,13 +126,14 @@ def getSeasonFixture(year, seasonID, numRounds):
         object: The fixture object 
     """  
 
+    # TODO: try to do this without webdriver
+
     # Create fixture object
     fixture = Fixture(year, numRounds)
 
     # Open the chrome webdriver
     driver = webdriver.Chrome(executable_path='C:\Program Files (x86)\Google\Chrome\chromedriver.exe')
 
-    
     for i in range(1, numRounds + 1):
         print(f"Getting fixture for round {i}")
 
@@ -141,6 +154,84 @@ def getSeasonFixture(year, seasonID, numRounds):
     driver.close()
     
     return fixture
+
+def getPlayersInfo(progressBar=None):
+    print("Getting players info")
+
+    # Open the afl players webpage
+    url = f"https://www.zerohanger.com/afl/players/"
+    response = requests.get(url)
+    
+    # Get all the links to the players
+    soup = BeautifulSoup(response.text, "html.parser")
+    links = soup.find_all("a")
+    playerLinks = []
+    regex = r"[^/?]+/\?players"
+    for link in links:
+        href = link.get("href")
+        if href is not None:
+            if re.match(regex, href, re.IGNORECASE):
+                playerLinks.append(href)
+                
+    # Loop through each player and get his stats
+    players = []
+    for link in playerLinks:
+        # Open the webpage of the player
+        url = f"https://www.zerohanger.com/afl/players/{link}"
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        # Get name
+        div_tag = soup.find('div', class_='player-profile-logo-right')
+        h1_tag = div_tag.find('h1')
+        span_tag = h1_tag.find("span")
+        firstName = span_tag.get_text(strip=True) or "Unknown"
+        lastName = h1_tag.get_text(strip=True)[len(firstName):] or "Unknown"
+
+        # Get team
+        element = soup.find('h2', class_='player-profile-club hide-mobile')
+        team = element.text or "Unknown"
+
+        # Get Number, Position, Weight, Height, DoB
+        div_tag = soup.find('div', class_='player-profile-details')
+        tr_tags = div_tag.find_all('tr')
+
+        number = "Unknown"
+        position = "Unknown"
+        weight = "Unknown"
+        height = "Unknown"
+        birthDate = "Unknown"
+
+        for tr_tag in tr_tags:
+            label = tr_tag.find('td', class_='label-title').text
+            value = tr_tag.find('td').find_next_sibling().text
+
+            if label == 'Number':
+                number = value
+            elif label == 'Position':
+                position = value
+            elif label == 'Weight':
+                weight = value
+            elif label == 'Height':
+                height = value
+            elif label == "Date of Birth":
+                birthDate = value
+
+        # Get Photo Link
+        div_tag = soup.find('div', class_='player-profile-image')
+        img_tag = div_tag.find('img')
+        photoLink = img_tag['src'] or "Unknown"
+
+        players.append(Player(firstName, lastName, team, number, position, weight, height, birthDate, photoLink, url))
+
+        # Percentage complete
+        if progressBar is not None:
+            percentComplete = len(players) / len(playerLinks) * 100
+            progressBar['value'] = percentComplete
+            progressBar.update()
+
+    return players
+
 
 def processFixture(html_string, year, roundNumber):
     """Processes the information from the HTML of the game fixture for a week
@@ -228,4 +319,4 @@ if __name__ == "__main__":
     # for matchId, playerStats in matchData.items():
     #     print(f"\n\n{matchId}\n")
     #     print(playerStats)
-    getSeasonFixture()
+    getPlayerInfo()
