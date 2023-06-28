@@ -8,15 +8,16 @@ import xlwings as xw
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
 from tkinter import *
 from tkinter.ttk import Progressbar
 
-from classes import *
+from classes.fixture import *
+from classes.game import *
 
-
-def getMatchData(wb, games):
+def getMatchData(wb, games, progressBar=None):
     """Use webscraping to get the match data
 
     Args:
@@ -25,14 +26,16 @@ def getMatchData(wb, games):
     Returns:
         list(Object): contains the games with the match data
     """
-    # 
 
-    # TODO: figure out how to speed this function up
-
+    # Set up Chrome options for running in headless mode
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    
     # Open the chrome webdriver
-    driver = webdriver.Chrome(executable_path='C:\Program Files (x86)\Google\Chrome\chromedriver.exe')
+    driver = webdriver.Chrome(executable_path='C:\Program Files (x86)\Google\Chrome\chromedriver.exe', options=chrome_options)
     
     # Loop through the games and get the match data
+    count = 0
     for game in games:
 
         gameID = game.gameID
@@ -42,7 +45,7 @@ def getMatchData(wb, games):
         driver.get(url)
 
         # Wait for the webpage to load
-        time.sleep(3)
+        time.sleep(2)
 
         # Scrape the player stats
         table = driver.find_element(By.TAG_NAME, "table")
@@ -53,6 +56,12 @@ def getMatchData(wb, games):
         game.addToSpreadsheet(wb)
         game.markGameLoaded(wb, True)
 
+        # Update the progress bar
+        count += 1
+        if progressBar is not None:
+            percentComplete = count / len(games) * 100
+            progressBar['value'] = percentComplete
+            progressBar.update()
    
     # Close the chrome webdriver
     driver.close()
@@ -111,7 +120,7 @@ def getLadder():
 
     return ladder_df
 
-def getSeasonFixture(year, seasonID, numRounds):
+def getSeasonFixture(wb, year, seasonID, numRounds, progressBar=None):
     """Use webscraping to get the game fixture for the given year
 
     Args:
@@ -129,10 +138,14 @@ def getSeasonFixture(year, seasonID, numRounds):
     # TODO: try to do this without webdriver
 
     # Create fixture object
-    fixture = Fixture(year, numRounds)
+    fixture = Fixture(wb, year, numRounds)
 
+    # Set up Chrome options for running in headless mode
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    
     # Open the chrome webdriver
-    driver = webdriver.Chrome(executable_path='C:\Program Files (x86)\Google\Chrome\chromedriver.exe')
+    driver = webdriver.Chrome(executable_path='C:\Program Files (x86)\Google\Chrome\chromedriver.exe', options=chrome_options)
 
     for i in range(1, numRounds + 1):
         print(f"Getting fixture for round {i}")
@@ -140,7 +153,7 @@ def getSeasonFixture(year, seasonID, numRounds):
         # Open the webpage of the week
         url = f"https://www.afl.com.au/fixture?Competition=1&CompSeason={seasonID}&MatchTimezone=MY_TIME&Regions=2&ShowBettingOdds=1&GameWeeks={i}&Teams=2&Venues=3#byround"
         driver.get(url)
-        time.sleep(2)
+        time.sleep(3)
 
         # Get data from the webpage and process it
         soup = BeautifulSoup(driver.page_source, "html.parser")
@@ -148,7 +161,13 @@ def getSeasonFixture(year, seasonID, numRounds):
         games = processFixture(divs[0], year, i)
         
         # Add the week's games to the fixture object
-        fixture.addGames(i, games)
+        fixture.addGames(games)
+
+        # Update the progress bar
+        if progressBar is not None:
+            percentComplete = i / numRounds * 100
+            progressBar['value'] = percentComplete
+            progressBar.update()
 
     # Close the chrome webdriver
     driver.close()
@@ -231,7 +250,6 @@ def getPlayersInfo(progressBar=None):
             progressBar.update()
 
     return players
-
 
 def processFixture(html_string, year, roundNumber):
     """Processes the information from the HTML of the game fixture for a week
@@ -319,4 +337,4 @@ if __name__ == "__main__":
     # for matchId, playerStats in matchData.items():
     #     print(f"\n\n{matchId}\n")
     #     print(playerStats)
-    getPlayerInfo()
+    pass

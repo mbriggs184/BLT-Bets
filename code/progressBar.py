@@ -11,7 +11,7 @@ def updateProgressBar(progressBar, percentage):
     progressBar.update()
 
 # Create a function to run the long_running_function in a separate thread
-def runFunctionWithStatusBar(function, *args):
+def runFunctionWithProgressBar(function, *args):
 
     def runFunction(function, *args):
         global result
@@ -49,7 +49,7 @@ def runFunctionWithStatusBar(function, *args):
     return result
 
 if __name__ == '__main__':
-    players = runFunctionWithStatusBar(ws.getPlayersInfo, *[])
+    players = runFunctionWithProgressBar(ws.getPlayersInfo, *[])
     print(players)
 
 

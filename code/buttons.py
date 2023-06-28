@@ -7,9 +7,9 @@ from tkinter import ttk
 from tkinter import messagebox
 import threading
 
-from webScraping import *
-from classes import *
-from progressBar import *
+from code.webScraping import *
+from code.classes.classes import *
+from code.progressBar import *
 
 def main():
     pass
@@ -35,7 +35,9 @@ def importFixture(wb=None):
     numRounds = int(sheet.range("C5").value)
 
     # Get the fixture and add it to the spreadsheet
-    fixture = getSeasonFixture(year, seasonID, numRounds)
+    fixture = runFunctionWithProgressBar(ws.getSeasonFixture, *[wb, year, seasonID, numRounds])
+    # fixture = getSeasonFixture(wb, year, seasonID, numRounds)
+    # fixture = getSeasonFixtureSlow(wb, year, seasonID, numRounds)
     fixture.addToSpreadsheet(sheet=wb.sheets['Fixture'])
 
 @xw.func
@@ -48,7 +50,7 @@ def importPlayers(wb=None):
     pasteRange = sheet.range("A8").expand()
     pasteRange.clear_contents()
 
-    players = runFunctionWithStatusBar(ws.getPlayersInfo, *[])
+    players = runFunctionWithProgressBar(ws.getPlayersInfo, *[])
 
     # Add all the information to a dataframe
     df = pd.DataFrame(columns = ['First Name','Last Name','Team','Number','Position','Weight','Height','DoB','Photo Link','Profile Link'])
@@ -59,11 +61,7 @@ def importPlayers(wb=None):
     sheet["A8"].options(pd.DataFrame, header=False, index=False, expand='table').value = df
 
 
-def runFunction(function, progress_bar):
-    global result
-    result = function(progress_bar)
-
 if __name__ == '__main__':
     wb = xw.Book('BLT Bets.xlsm')
-    importPlayers(wb)
+    importFixture(wb)
     
